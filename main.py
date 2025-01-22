@@ -1,32 +1,30 @@
 from playwright.sync_api import sync_playwright
+from config.config_reader import ConfigReader
+from automation.browser import BrowserAutomation
+from automation.actions.auth_actions import AuthActions
 
-def run(playwright):
-    #browser = playwright.chromium.launch(headless=False)
-    #page = browser.new_page()
+def main():
+    # Читаем конфигурацию
+    config = ConfigReader().get_config()
     
-    # Проходим авторизацию
+    # Инициализируем браузер
+    automation = BrowserAutomation(config)
     
-    # Подключаемся к открытому браузеру
-    browser = playwright.chromium.connect_over_cdp("http://localhost:9222")
-    default_context = browser.contexts[0]
-    page = default_context.pages[0]
+    try:
+        # TBD: переходим на страницу заказа
+        automation.start(is_debug=True, visible=True)
+        
+        print(f"Opened page: {automation.page.title()}")
+        
+        # TBD: Если открыта страница авторизации - авторизуйся
 
-    # Print the title of the page.
-    print(page.title())
+        # Шаг 1
+        if config.org_type == 'ТОО':
+            automation.page.click('//a[contains(text(), \'Заявка на участие в конкурсе для юридических лиц (Приложение 4)\')]')
+        elif config.org_type == 'ИП':
+            automation.page.click('//a[contains(text(), \'Заявка на участие в конкурсе для физических лиц (Приложение 5)\')]')
+    finally:
+        automation.close(is_debug=True)
 
-    # Print the URL of the page.
-    print(page.url)
-
-    # Открываем заявку
-    #page.goto('https://v3bl.goszakup.gov.kz/ru/application/docs/13564243/61487249')
-    
-    # Открываем документ на подписание
-    page.click('//a[contains(text(), \'Заявка на участие в конкурсе для юридических лиц (Приложение 4)\')]')   
-    
-    # Пауза для просмотра результата
-    #page.wait_for_timeout(3000)
-    
-    # browser.close()
-
-with sync_playwright() as playwright:
-    run(playwright)
+if __name__ == "__main__":
+    main()

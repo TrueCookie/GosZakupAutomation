@@ -7,6 +7,8 @@ class Config:
     signature_name: str
     cert_path: str
     cert_password: str
+    account_password: str
+    key_number: str
     base_url: str
     org_type: str
 

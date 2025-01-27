@@ -29,20 +29,25 @@ def main():
         # goszakup_actions.sign_participation_application(automation.page)
         
         # Шаг 2
-        # automation.page.click("//a[contains(text(), 'Перечень приобретаемых товаров(Приложение 2)')]")
-        # goszakup_actions.sign_goods_list(automation.page)
+        automation.page.click("//a[contains(text(), 'Перечень приобретаемых товаров(Приложение 2)')]")
+        goszakup_actions.sign_goods_list(automation.page)
 
-        # Шаг 3
+        # # Шаг 3
         # automation.page.click("//a[contains(text(), 'Техническое задание(Приложение 3)')]")
         # goszakup_actions.sign_technical_spec(automation.page)
 
-        # Шаг 4 TBD: Протестировать
-        automation.page.click("//a[contains(text(), 'Сведения о квалификации работников потенциального поставщика (Приложение 6)')]")
-        goszakup_actions.copy_qualification_data(automation.page)
+        # # Шаг 4
+        # automation.page.click("//a[contains(text(), 'Сведения о квалификации работников потенциального поставщика (Приложение 6)')]")
+        # goszakup_actions.copy_qualification_data(automation.page)
 
-        # Шаг 5 TBD: Попросить чатгпт написать
-        automation.page.click("//a[contains(text(), 'Обеспечение заявки, либогарантийный денежный взнос')]")
-        goszakup_actions.submit_application(automation.page)
+        # # Шаг 5
+        # automation.page.click("//a[contains(text(), 'Обеспечение заявки, либогарантийный денежный взнос')]")
+        # goszakup_actions.submit_application(automation.page)
+
+        # # Шаг 6
+        # automation.page.click("//button[text()='Далее']")
+        # goszakup_actions.last_action(automation.page)
+
 
     except Exception as e:
         print(f"Error while processing main steps")

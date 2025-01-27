@@ -15,8 +15,8 @@ class GosZakupAutomation:
         self.playwright = None
         self.browser = None
         #self.page = None
-        self.auth_actions = AuthActions()
-        self.cert_selector = CertificateSelector()        
+        self.auth_actions = AuthActions(config)
+        self.cert_selector = CertificateSelector(config)        
         self.logger = logging.getLogger(__name__)
         logging.basicConfig(level=logging.NOTSET)
 
@@ -63,7 +63,7 @@ class GosZakupAutomation:
             self.logger.debug("Clicked sign button")
 
             # 2. Ждем появления окна выбора сертификата и выбираем сертификат
-            if not self.cert_selector.select_certificate_by_coords():
+            if not self.cert_selector.select_certificate_in_explorer():
                 raise Exception("Failed to select certificate") # TBD: invoke select_cert_in_explorer method
             self.logger.debug("Certificate selected")
             
@@ -95,19 +95,25 @@ class GosZakupAutomation:
             self.logger.debug("Clicked sign button for goods list")
 
             # 3. Ждем появления окна выбора сертификата и выбираем сертификат
-            if not self.cert_selector.select_certificate_by_coords():
+            if not self.cert_selector.select_certificate_in_explorer():
                 raise Exception("Failed to select certificate")
             self.logger.debug("Certificate selected")
 
             # 4. Нажимаем кнопку "Сохранить подпись"
+            page.wait_for_selector("//input[@type='submit' and @value='Сохранить подпись']", timeout=5000)
             page.click("//input[@type='submit' and @value='Сохранить подпись']", timeout=5000)
             self.logger.debug("Clicked save sign")
 
             # 5. Ждем появления сообщения "Подпись успешно сохранена"
-            page.wait_for_selector("//div[text()='Подпись успешно сохранена']", timeout=5000)
+            page.wait_for_selector("//div[text()='Подпись успешно сохранена']", timeout=10000)
 
             # 6. Возвращаемся к списку документации
-            page.click("//a[text()='Вернуться в заявку']", timeout=5000)
+            self.return_to_main_page(
+                page,
+                'Вернутъся к заявке',
+                "//div[@class='panel-heading' and .//h4[contains(text(),'Заявка №')]]"
+            )
+
             self.logger.debug("Clicked get back to order")
 
             #self.return_to_main_page(page)
@@ -153,7 +159,7 @@ class GosZakupAutomation:
                 self.logger.debug("Clicked sign button")
 
                 # 3. Выбираем сертификат
-                if not self.cert_selector.select_certificate_by_coords():
+                if not self.cert_selector.select_certificate_in_explorer():
                     raise Exception(f"Failed to select certificate for lot {lot_number}")
                 self.logger.debug("Certificate selected")
 
@@ -218,7 +224,7 @@ class GosZakupAutomation:
             
             # 6.2 Выбираем лоты в текущей заявке
             # Получаем все строки таблицы
-            rows = page.locator("//p[starts-with(text(),'Копирование сведения о квалификации в лот')]/following::table[1]")
+            rows = page.locator("//p[starts-with(text(),'Копирование сведения о квалификации в лот')]/following::table[1]//tr")
 
             # Считаем количество строк (вычитаем 1, т.к. первая строка - заголовок)
             lots_count = rows.count() - 1
@@ -241,7 +247,7 @@ class GosZakupAutomation:
             self.logger.debug("Clicked get back to order")
 
             # 9. Ждем завершения копирования
-            page.wait_for_selector("//a[contains(text(),'Сформировать приложение')]", timeout=15000)
+            page.wait_for_selector("//button[contains(text(),'Сформировать приложение')]", timeout=15000)
             self.logger.debug("Copy completed")
 
             # 9. Выбираем в списке опцию "Нет"
@@ -249,7 +255,7 @@ class GosZakupAutomation:
             self.logger.debug("Selected 'No' option")
 
             # 11. Нажимаем "Сформировать приложение"
-            page.click("//a[contains(text(),'Сформировать приложение')]", timeout=5000)
+            page.click("//button[contains(text(),'Сформировать приложение')]", timeout=5000)
             self.logger.debug("Clicked generate button")
 
             # 12. Ждем формирования приложения
@@ -264,7 +270,7 @@ class GosZakupAutomation:
             self.cert_selector.select_certificate_in_explorer()
             self.logger.debug("Certificate selected")
 
-                        # 3. Возвращаемся к списку документации
+            # 3. Возвращаемся к списку документации
             self.return_to_main_page(
                 page,
                 ' Вернуться в список документов ',
@@ -279,6 +285,96 @@ class GosZakupAutomation:
             self.logger.error(f"Error copying qualification data: {str(e)}")
             self._handle_error(page)
             raise
+
+    def submit_application(self, page):
+        """
+        Подача заявки
+        page: объект страницы Playwright
+        lots_count: количество лотов
+        """
+        try:
+            self.logger.info("Starting application submission")
+
+            # Получаем все строки таблицы
+            rows = page.locator("//div[text()='Добавление обеспечение заявки']/following-sibling::div//table//tr")
+
+            # Считаем количество строк (вычитаем 1, т.к. первая строка - заголовок)
+            lots_count = rows.count() - 1
+            self.logger.info(f"Starting to add {lots_count} lots")
+
+            # Для каждого лота
+            for lot_number in range(1, lots_count + 1):
+                self.logger.debug(f"Processing lot {lot_number}")
+
+                # Выбираем лот в текущей заявке
+                page.click(f"//div[text()='Добавление обеспечение заявки']/following-sibling::div//table//tr[{lot_number + 1}]//a[contains(text(),'Добавить')]")
+                self.logger.debug("Added lot")
+
+                # Выбираем в списке опцию 'Деньги, с электронного кошелька'
+                page.select_option("select[name='typeDoc']", label='Деньги, с электронного кошелька')
+                self.logger.debug("Selected option 'Деньги, с электронного кошелька'")
+
+                # Ждем появления кнопки "Сохранить"
+                page.wait_for_selector("//input[@value='Сохранить']", timeout=10000)
+                self.logger.debug("Save button appeared")
+
+                # Нажимаем кнопку "Сохранить"
+                page.click("//input[@value='Сохранить']")
+                self.logger.debug("Clicked save button")
+
+                # Ждем появления кнопки "Назад"
+                page.wait_for_selector("//a[contains(text(),'Назад')]", timeout=10000)
+                self.logger.debug("Back button appeared")
+
+                # Возвращаемся к списку лотов
+                self.return_to_main_page(
+                    page,
+                    'Назад',
+                    "//a[contains(text(),'Вернуться в заявку')]"
+                )
+
+            # Возвращаемся к списку документации
+            self.return_to_main_page(
+                page,
+                'Вернуться в заявку',
+                "//div[@class='panel-heading' and .//h4[contains(text(),'Заявка №')]]"
+            )
+
+            return True
+
+        except Exception as e:
+            self.logger.error(f"Error submitting application: {str(e)}")
+            self._handle_submission_error(page)
+            raise
+
+    def last_action(self, page):
+        """
+        Последнее действие
+        page: объект страницы Playwright
+        lots_count: количество лотов
+        """
+        try:
+            self.logger.info("Starting application submission")
+
+            page.wait_for_selector("//button[text()='Подписать заявку']", timeout=10000)
+            page.click(f"//button[text()='Подписать заявку']")
+            self.logger.debug("Added lot")
+            
+            page.wait_for_selector("//div[contains(text(),'Ваша заявка успешно подписана')]", timeout=10000)
+            page.click(f"//button[text()='Далее']")
+            self.logger.debug("Added lot")
+
+            page.wait_for_selector("//button[text()='Подать заявку']", timeout=10000)
+            page.click(f"//button[text()='Подать заявку']")
+            self.logger.debug("Added lot")
+
+            return True
+
+        except Exception as e:
+            self.logger.error(f"Error submitting application: {str(e)}")
+            self._handle_submission_error(page)
+            raise
+
 
 
     def verify_main_page_return(self, page, ver_main_page_selector):

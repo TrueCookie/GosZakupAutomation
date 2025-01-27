@@ -4,7 +4,7 @@ from automation.actions.certificate_selector import CertificateSelector
 
 class AuthActions(BaseActions):
     def __init__(self, config: Config):
-        self.cert_selector = CertificateSelector()
+        self.cert_selector = CertificateSelector(config)
         self.config = config
 
     def full_auth(self, page):

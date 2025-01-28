@@ -6,6 +6,7 @@ from automation.goszakup import GosZakupAutomation
 
 def main():
     # Читаем конфигурацию
+    config_reader = ConfigReader()
     config = ConfigReader().get_config()
     
     # Инициализируем браузер
@@ -21,32 +22,37 @@ def main():
         # TBD: Если открыта страница авторизации - авторизуйся
 
         # Шаг 1
-        # if config.org_type == 'ТОО':
-        #     automation.page.click('//a[contains(text(), \'Заявка на участие в конкурсе для юридических лиц (Приложение 4)\')]')
-        # elif config.org_type == 'ИП':
-        #     automation.page.click('//a[contains(text(), \'Заявка на участие в конкурсе для физических лиц (Приложение 5)\')]')
+        if config_reader.should_execute_step(1):
+            if config.org_type == 'ТОО':
+                automation.page.click('//a[contains(text(), \'Заявка на участие в конкурсе для юридических лиц (Приложение 4)\')]')
+            elif config.org_type == 'ИП':
+                automation.page.click('//a[contains(text(), \'Заявка на участие в конкурсе для физических лиц (Приложение 5)\')]')
+            goszakup_actions.sign_participation_application(automation.page)
 
-        # goszakup_actions.sign_participation_application(automation.page)
-        
         # Шаг 2
-        automation.page.click("//a[contains(text(), 'Перечень приобретаемых товаров(Приложение 2)')]")
-        goszakup_actions.sign_goods_list(automation.page)
+        if config_reader.should_execute_step(2):
+            automation.page.click("//a[contains(text(), 'Перечень приобретаемых товаров(Приложение 2)')]")
+            goszakup_actions.sign_goods_list(automation.page)
 
-        # # Шаг 3
-        # automation.page.click("//a[contains(text(), 'Техническое задание(Приложение 3)')]")
-        # goszakup_actions.sign_technical_spec(automation.page)
+        # Шаг 3
+        if config_reader.should_execute_step(3):
+            automation.page.click("//a[contains(text(), 'Техническое задание(Приложение 3)')]")
+            goszakup_actions.sign_technical_spec(automation.page)
 
-        # # Шаг 4
-        # automation.page.click("//a[contains(text(), 'Сведения о квалификации работников потенциального поставщика (Приложение 6)')]")
-        # goszakup_actions.copy_qualification_data(automation.page)
+        # Шаг 4
+        if config_reader.should_execute_step(4):
+            automation.page.click("//a[contains(text(), 'Сведения о квалификации работников потенциального поставщика (Приложение 6)')]")
+            goszakup_actions.copy_qualification_data(automation.page)
 
-        # # Шаг 5
-        # automation.page.click("//a[contains(text(), 'Обеспечение заявки, либогарантийный денежный взнос')]")
-        # goszakup_actions.submit_application(automation.page)
+        # Шаг 5
+        if config_reader.should_execute_step(5):
+            automation.page.click("//a[contains(text(), 'Обеспечение заявки, либогарантийный денежный взнос')]")
+            goszakup_actions.submit_application(automation.page)
 
-        # # Шаг 6
-        # automation.page.click("//button[text()='Далее']")
-        # goszakup_actions.last_action(automation.page)
+        # Шаг 6
+        if config_reader.should_execute_step(6):
+            automation.page.click("//button[text()='Далее']")
+            goszakup_actions.last_action(automation.page)
 
 
     except Exception as e:

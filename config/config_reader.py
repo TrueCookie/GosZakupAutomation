@@ -1,5 +1,6 @@
 import logging
 import os
+import sys
 import pandas as pd
 from config.data_classes import Config
 
@@ -8,8 +9,11 @@ class ConfigReader:
         self.logger = logging.getLogger(__name__)
         logging.basicConfig(level=logging.NOTSET)
         
-        if not os.path.exists(config_path):
-            raise FileNotFoundError(f"Config file not found: {config_path}")
+        # Ищем конфиг сначала в текущей директории, потом в папке с exe
+        if os.path.exists(config_path):
+            self.config_path = config_path
+        else:
+            self.config_path = self.resource_path(config_path)
         
         # Читаем лист "Настройка аккаунта"
         self.config_df = pd.read_excel(config_path, sheet_name="Настройка аккаунта")
@@ -45,29 +49,15 @@ class ConfigReader:
             key_number=config_row['Номер заявки для копирования данных']
         )
 
-        # TBD: Пока хардкод
-        # ТОО:
-        return Config(
-            org_type='ТОО',
-            account_name="1",
-            account_password='Ernarstroy2013',
-            cert_path=r"C:\dev\__bite_dev\PROJGosZakupAutomation\cert\GOST512_02213f9c53acb47ee1fc17fa8592e2bd0b98df29.p12",
-            cert_password='Aa1234',
-            key_number='test_key_number'
-        )
-        # ИП:
-        # return Config(
-        #     login_url="https://v3bl.goszakup.gov.kz/ru/user/login",
-        #     windows_credential='test_windows_credential',
-        #     signature_name='test_signature_name',
-        #     cert_path=r"C:\Users\artemiy.ogloblin\Downloads\GOST512_b32b00ee0727c13e6a843c4dec9d653d4a9adf9c (1).p12",
-        #     cert_password='Aa123456',
-        #     account_password='Aa1234@_',
-        #     key_number='13526367-1',
-        #     base_url='https://v3bl.goszakup.gov.kz',
-
-        #     org_type='ИП' # TBD add desc to config: ТОО/ИП
-        # )
-
     def should_execute_step(self, step_number: int) -> bool:
         return step_number in self.active_steps
+    
+    def resource_path(relative_path):
+        """Получает абсолютный путь к ресурсу"""
+        try:
+            # PyInstaller создает временную папку и хранит путь в _MEIPASS
+            base_path = sys._MEIPASS
+        except Exception:
+            base_path = os.path.abspath(".")
+
+        return os.path.join(base_path, relative_path)

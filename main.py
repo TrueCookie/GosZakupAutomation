@@ -1,10 +1,19 @@
-from playwright.sync_api import sync_playwright
+import logging
+import sys
+
 from config.config_reader import ConfigReader
 from automation.browser import BrowserAutomation
 from automation.actions.auth_actions import AuthActions
 from automation.goszakup import GosZakupAutomation
 
 def main():
+    # Настраиваем логирование
+    logging.basicConfig(
+        filename='program.log',
+        level=logging.DEBUG,
+        format='%(asctime)s - %(levelname)s - %(message)s'
+    )
+    
     # Читаем конфигурацию
     config_reader = ConfigReader()
     config = ConfigReader().get_config()
@@ -14,10 +23,11 @@ def main():
     goszakup_actions = GosZakupAutomation(config)
     
     try:
-        # TBD: переходим на страницу заказа
+        logging.info("Программа запущена")
+
         automation.start(is_debug=True, visible=True)
         
-        print(f"Opened page: {automation.page.title()}")
+        print(f"Открыта страница: {automation.page.title()}")
         
         # TBD: Если открыта страница авторизации - авторизуйся
 
@@ -54,10 +64,23 @@ def main():
             automation.page.click("//button[text()='Далее']")
             goszakup_actions.last_action(automation.page)
 
+        print("\n-- Программа успешно завершена! --")
+        input("Нажмите Enter для выхода...")
+        sys.exit(1)
+
+    except FileNotFoundError:
+        print("\nОшибка: Файл конфигурации не найден. Убедитесь, что файл Config.xlsx находится в папке data/")
+        input("Нажмите Enter для выхода...")
+        sys.exit(1)
 
     except Exception as e:
-        print(f"Error while processing main steps")
+        logging.error(f"Ошибка: {str(e)}")
+        print(f"\nПроизошла ошибка: {str(e)}")
+        input("Нажмите Enter для выхода...")
+        sys.exit(1)
+
     finally:
+        logging.info("Программа завершена")
         automation.close(is_debug=True)
 
 if __name__ == "__main__":

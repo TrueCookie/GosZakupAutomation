@@ -17,25 +17,6 @@ class GosZakupAutomation:
         self.cert_selector = CertificateSelector(config)        
         self.logger = logging.getLogger(__name__)
         logging.basicConfig(level=logging.NOTSET)
-
-    # def process_order(self, order: Order):
-    #     """Обработка одного заказа"""
-    #     try:
-    #         #self.navigate_to_order(order.number)
-    #         self.sign_participation_application(self.page)
-    #         self.sign_goods_list()
-    #         self.sign_technical_spec(order.lots_count)
-    #         self.copy_qualification_data()
-    #         self.submit_application()
-    #     except Exception as e:
-    #         print(f"Error processing order {order.number}: {str(e)}")
-    #         # Можно добавить логирование ошибки
-
-    def navigate_to_order(self, order_number: str):
-        """Переход на страницу заказа"""
-        url = f"{self.config.base_url}/order/{order_number}"
-        self.page.goto(url)
-        # Добавить проверку загрузки страницы
         
     def sign_participation_application(self, page):
         """
@@ -88,22 +69,13 @@ class GosZakupAutomation:
             page.wait_for_selector("//h3[text()='Перечень приобретаемых товаров(Приложение 2)']", timeout=5000)
             self.logger.debug("Goods list section loaded")
 
-            # 2. Нажимаем кнопку "Подписать" в разделе перечня товаров
-            page.click("//button[.//span[contains(text(),'Подписать')]]")
-            self.logger.debug("Clicked sign button for goods list")
-
-            # 3. Ждем появления окна выбора сертификата и выбираем сертификат
-            if not self.cert_selector.select_certificate_in_explorer():
-                raise Exception("Failed to select certificate")
-            self.logger.debug("Certificate selected")
-
             # 4. Нажимаем кнопку "Сохранить подпись"
-            page.wait_for_selector("//input[@type='submit' and @value='Сохранить подпись']", timeout=5000)
-            page.click("//input[@type='submit' and @value='Сохранить подпись']", timeout=5000)
-            self.logger.debug("Clicked save sign")
-
-            # 5. Ждем появления сообщения "Подпись успешно сохранена"
-            page.wait_for_selector("//div[text()='Подпись успешно сохранена']", timeout=10000)
+            self.try_to_sign(
+                page,
+                "//button[.//span[contains(text(),'Подписать')]]",
+                "//input[@type='submit' and @value='Сохранить подпись']",
+                "//div[text()='Подпись успешно сохранена']"
+            )
 
             # 6. Возвращаемся к списку документации
             self.return_to_main_page(
@@ -384,7 +356,7 @@ class GosZakupAutomation:
         )
 
         if success:
-            self.logger.info("Participation application signed successfully")
+            self.logger.info("Return is successfully")
             return True
         else:
             raise False # Exception("Success indicator not found after signing")
@@ -411,3 +383,35 @@ class GosZakupAutomation:
         
         # Подтверждаем возвращение на страницу со списком документации
         self.logger.debug(f"Returning on main page succeed. Try counter: {try_count}/{try_max}")
+
+    def try_to_sign(self, page, sign_button_selector, save_sign_button, ver_element_selector, try_max=3):
+        # Действия для возвращения на страницу со списком документации
+        is_on_main_page = False
+        try_count = 0
+        while is_on_main_page != True and try_count < try_max:
+            # Нажимаем "Подписать"
+            page.wait_for_selector(sign_button_selector, timeout=10000, state='visible')
+            page.wait_for_timeout(2000)
+            page.click(sign_button_selector)
+            self.logger.debug("Clicked sign button")
+
+            # Ждем появления окна выбора сертификата и выбираем сертификат
+            if not self.cert_selector.select_certificate_in_explorer():
+                raise Exception("Failed to select certificate")
+            self.logger.debug("Certificate selected")
+
+            page.wait_for_selector(save_sign_button, timeout=5000)
+            page.click(save_sign_button, timeout=5000)
+            self.logger.debug("Clicked save sign")
+
+            # 4. Ждем возвращения на страницу со списком документации
+            is_on_main_page = self.verify_main_page_return(page, ver_element_selector)
+            try_count = try_count + 1
+            if is_on_main_page == False:
+                self.logger.debug(f"Failded to sign. Try counter: {try_count}/{try_max}")
+
+        if is_on_main_page == False:
+            raise Exception("Exceed tries to sign")
+        
+        # Подтверждаем возвращение на страницу со списком документации
+        self.logger.debug(f"Signing succeed. Try counter: {try_count}/{try_max}")

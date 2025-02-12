@@ -6,19 +6,12 @@ from automation.actions.certificate_selector import CertificateSelector
 def test():
     config = ConfigReader().get_config()
     automation = BrowserAutomation(config)
-    cert_selector = CertificateSelector(config)
 
     try:
-        automation.start(is_debug=True, visible=True)
-        
-        auth_actions = AuthActions(config)
-        
-        #auth_actions.login(automation.page)
-        cert_selector.select_certificate_in_explorer()
-        
-        #auth_actions.auth_confirm(automation.page)
+        automation.start(page_url_base='https://v3bl.goszakup.gov.kz/ru/user/login')
 
-        
+        auth_actions = AuthActions(config)
+        auth_actions.full_auth(automation.page)        
 
     except Exception as e:
         print(f"Error while processing login")

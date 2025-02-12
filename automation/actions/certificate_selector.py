@@ -103,7 +103,12 @@ class CertificateSelector:
             # Получаем текущие координаты мыши и цвет пикселя
             pixel_color = pyautogui.screenshot().getpixel((x, y))            
             print(f"\rPosition: ({x}, {y}) RGB: {pixel_color}", end='')
+ 
+        except Exception as e: #TimeoutError
+            print(f"WARN: 'Creating CSP' window is not found. Next step is find window with title 'Select certificate'. Error desc: {str(e)}")
+            pass
 
+        try:    
             pywinauto.timings.wait_until_passes(
                 timeout=30,
                 retry_interval=1,

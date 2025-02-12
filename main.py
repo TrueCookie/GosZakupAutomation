@@ -20,16 +20,30 @@ def main():
     
     # Инициализируем браузер
     automation = BrowserAutomation(config)
-    goszakup_actions = GosZakupAutomation(config)
     
     try:
         logging.info("Программа запущена")
 
-        automation.start(is_debug=True, visible=True)
+        # TBD: Если 0 шаг включен, то url='https://v3bl.goszakup.gov.kz/ru/announce/index'
+        #automation.start()
+        automation.start(page_url_base='https://v3bl.goszakup.gov.kz/ru/announce/index')
+        goszakup_actions = GosZakupAutomation(config, automation.page)
         
         print(f"Открыта страница: {automation.page.title()}")
         
         # TBD: Если открыта страница авторизации - авторизуйся
+
+        # ТЕСТ
+        #from automation.actions.lots_selector import LotSelector
+        #lots_selector = LotSelector(config)
+        #lots_count_in_app=83
+        #goszakup_actions.select_lots(automation.page, lots_selector, lots_count_in_app)
+
+        # # Шаг 0 - Начальные действия подачи заявки на участие на странице 'Просмотр объявления'
+        if config_reader.should_execute_step(0): # TBD: Сделать более user-frienldy (начинать с 1 или вынести в отдельное поле)
+            goszakup_actions.start_submit_application(automation.page)
+            
+        
 
         # Шаг 1
         if config_reader.should_execute_step(1):

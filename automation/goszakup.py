@@ -1,23 +1,126 @@
 import logging
-
+import time
 from config.data_classes import Config
 
 from automation.browser import BrowserAutomation
 from automation.actions.auth_actions import AuthActions
+from automation.actions.base_actions import BaseActions
 from automation.actions.certificate_selector import CertificateSelector
+from automation.actions.lots_selector import LotSelector
 
+from playwright.sync_api import Page
 from playwright.async_api import TimeoutError
 
 class GosZakupAutomation:
-    def __init__(self, config: Config):
+    def __init__(self, config: Config, page):
         self.config = config
-        self.playwright = None
-        self.browser = None
+        self.page = page
         self.auth_actions = AuthActions(config)
+        self.actions = BaseActions(page)
         self.cert_selector = CertificateSelector(config)        
         self.logger = logging.getLogger(__name__)
         logging.basicConfig(level=logging.NOTSET)
-        
+
+    def start_submit_application(self, page: Page):
+        """
+        Начальные действия подачи заявки на участие на странице 'Просмотр объявления'
+        page: объект страницы Playwright
+        """
+        try:
+            self.logger.info("Starting submitting application")
+            
+            page.set_default_timeout(10000)
+            
+            wait_actions_button_timeout=60*40
+            lots_count_in_app = None
+            
+            # 1.1 Подтверждаем переход на нужную страницу
+            try:
+                page.wait_for_selector("//h4[contains(text(),'Просмотр объявления')]", timeout=5000)            
+            except TimeoutError:
+                self.logger.debug("Required page is not found. Check if its login page")
+                self.auth_actions.full_auth(page)
+            
+            # 1.2 Ожидаем появления кнопки "Доступные действия"
+            if self.wait_for_button(
+                page,
+                "//button[text()='Доступные действия ']",
+                timeout=wait_actions_button_timeout
+            ):
+                self.logger.info("Button 'Available actions' has appeared")
+            else:
+                raise Exception(f"Превышено кол-во времени для ожидания кнопки 'Доступные действия' (Таймаут: {wait_actions_button_timeout} c)")
+
+            # TBD: Добавить проверку, что открыта вкладка "Общие сведения". Если нет - открыть
+            # Запоминаем кол-во лотов в заявке
+            lots_count_in_app_text = page.text_content("//table//tr[.//th[text()='Кол-во лотов в объявлении']]//td")
+            lots_count_in_app = int(lots_count_in_app_text)
+
+            # 1.3 Нажимаем кнопку "Доступные действия"
+            page.click("//button[text()='Доступные действия ']")
+            self.logger.debug("Clicked 'Available actions' button")
+
+            # 1.4 Выбираем "Создать заявку"
+            page.click("//ul[@class='dropdown-menu']//a[text()='Создать заявку']")
+            self.logger.debug("Selected 'Create application'")
+
+            # TBD: Если мы на этой странице - выполнять действия ниже. Если нет - залогировать, но пропустить
+            # 2.1 Подтверждаем переход на нужную страницу
+            try:
+                page.wait_for_selector("//h4[contains(text(),'Создание заявки')]", timeout=5000)            
+            except TimeoutError:
+                self.logger.debug("Required page is not found")
+                raise
+                        
+            # 2.2 Выбираем первый адрес в поле "Юридический адрес"
+            page.select_option("//select[@name='subject_address']", index=1)
+            self.logger.debug("Selected first option in list 'Subject address'")
+
+            # 2.3 Выбираем первый адрес в поле "ИИК"
+            page.select_option("//select[@name='iik']", index=1)
+            self.logger.debug("Selected first option in list 'IIK'")
+            
+            # 2.4 Вводим случайный номер в поле "Контактный телефон"
+            page.fill("//input[@name='contact_phone']", "89001234567")
+            self.logger.debug("Entered random number")
+
+            # 2.5 Нажимаем кнопку "Далее"
+            page.click("//button[text()='Далее']")
+            #self.actions.wait_and_click("//button[text()='Далее']")
+            self.logger.debug("Clicked 'Next' button")
+
+            # 3.1 Подтверждаем переход на нужную страницу
+            try:
+                page.wait_for_selector("//h4[contains(text(),'Добавление лотов для участия в закупке')]", timeout=10000)            
+            except TimeoutError:
+                self.logger.debug("Required page is not found")
+                raise
+            
+            # 3.2 Выбираем нужные лоты
+            # Для каждой страницы
+            lots_selector = LotSelector(self.config)
+            self.select_lots(page, lots_selector, lots_count_in_app)
+
+            # 4. Нажимаем кнопку "Далее"
+            page.click("//button[text()='Далее']")
+            #self.actions.wait_and_click("//button[text()='Далее']")
+            self.logger.debug("Clicked 'Next' button")
+
+            # 5. Подтверждаем переход страницу со списком документации
+            try:
+                page.wait_for_selector(
+                    "//div[@class='panel-heading' and .//h4[contains(text(),'Заявка №')]]",
+                    timeout=5000
+                )            
+            except TimeoutError:
+                self.logger.debug("Page with Document list is not found")
+                raise
+
+        except Exception as e:
+            self.logger.error(f"Error adding lots to application: {str(e)}")
+            raise
+
+
     def sign_participation_application(self, page):
         """
         Подписание заявки на участие
@@ -221,7 +324,7 @@ class GosZakupAutomation:
             self.logger.debug("Copy completed")
 
             # 9. Выбираем в списке опцию "Нет"
-            page.select_option('select[name="bankruptcy"]', label='Нет')
+            page.select_option('//select[@name="bankruptcy"]', label='Нет') # TBD: Проверить, что здесь name, а не @name
             self.logger.debug("Selected 'No' option")
 
             # 11. Нажимаем "Сформировать приложение"
@@ -281,7 +384,7 @@ class GosZakupAutomation:
                 self.logger.debug("Added lot")
 
                 # Выбираем в списке опцию 'Деньги, с электронного кошелька'
-                page.select_option("select[name='typeDoc']", label='Деньги, с электронного кошелька')
+                page.select_option("//select[@name='typeDoc']", label='Деньги, с электронного кошелька') # TBD: Проверить, что здесь name, а не @name
                 self.logger.debug("Selected option 'Деньги, с электронного кошелька'")
 
                 # Ждем появления кнопки "Сохранить"
@@ -345,7 +448,20 @@ class GosZakupAutomation:
             self._handle_submission_error(page)
             raise
 
+    # Функции утилит
 
+    def wait_for_button(self, page, selector, timeout=60*40, refresh_interval=10):
+        start_time = time.time()
+        
+        while time.time() - start_time < timeout:
+            button = page.query_selector(selector)
+            if button:
+                return True
+                
+            page.reload()
+            time.sleep(refresh_interval) # TBD: Оптимизируй здесь
+        
+        return False
 
     def verify_main_page_return(self, page, ver_main_page_selector):
         """Проверка успешности возвращения на страницу со списком документации"""
@@ -415,3 +531,115 @@ class GosZakupAutomation:
         
         # Подтверждаем возвращение на страницу со списком документации
         self.logger.debug(f"Signing succeed. Try counter: {try_count}/{try_max}")
+
+    def should_select_lot(self, lot_number: str) -> bool:
+        """
+        Определяет, нужно ли выбрать конкретный лот
+        """
+        if self.config.include_all:
+            return True
+        elif self.config.exclude_lots:
+            return lot_number not in self.config.lots
+        else:  # include_specific
+            return lot_number in self.config.lots
+        
+    def select_lots(self, page: Page, lot_selector: LotSelector, declaration_lots_count: int):
+        """
+        Выбирает лоты на всех страницах согласно настройкам
+        """
+        logging.info(f"Режим выбора лотов: {lot_selector.get_selection_mode()}")
+        
+        total_processed = 0
+        current_page = 1
+        
+        while True:
+            # Подсчитываем лоты на текущей странице
+            selected_on_page = 0
+            #lot_checkboxes = page.query_selector_all("input[type='checkbox']") # Заменить на получение row
+            lot_rows = page.query_selector_all("//div[contains(@class, 'active')]//table//tbody//tr")
+            
+            if not lot_rows:
+                # Если на предыдущем шаге мы выбрали все лоты, на странице их не окажется
+                break
+                #raise ValueError(f"На странице {current_page} не найдена таблица для выбора лотов.")
+            
+            # TBD: Оптимизация: скрипт 1 лишний раз проходит по всем лотам на странице - изменить алгоритм обработки
+            # Обрабатываем лоты на текущей странице
+            for lot_row in lot_rows:
+                lot_number_with_letters = lot_row.query_selector("//td[2]").text_content()
+                number_separator_index = lot_number_with_letters.find('-')
+                
+                lot_number = lot_number_with_letters[:number_separator_index]
+                checkbox = lot_row.query_selector("input[type='checkbox']")
+
+                if lot_selector.should_select_lot(lot_number):
+                    checkbox.check()
+                    selected_on_page += 1
+                    lot_selector.mark_lot_processed(lot_number)
+                #else:
+                #    checkbox.uncheck() # TBD: Оптимизация: это действие нам не нужно
+                
+            # Нажимаем "Добавить выбранные"
+            add_button = page.query_selector("//button[text()='Добавить выбранные']")
+            if add_button:
+                add_button.click()
+                logging.info("Нажата кнопка 'Добавить выбранные'")
+            else:
+                raise ValueError("Кнопка 'Добавить выбранные' не найдена")
+
+            
+            # Проверяем был ли переход на вкладку Просмотра выбранных лотов
+            lots_viewer_tab_active = None
+            try:
+                # TBD: Оптимизация: возможно для подтверждения не-перехода на страницу просмотра выбранных лотов нужно меньше времени
+                # NOTE: Селектор работает неправильно, но алгоритм отрабатывает
+                lots_viewer_tab_active = page.wait_for_selector("//li[//a[text()='Просмотр выбранных '] and @class='active']", timeout=10000)
+            except TimeoutError:
+                self.logger.debug("Tab with Lots viewer is not found")
+            
+            # Если перешли на вторую вкладку - возвращаемся на первую
+            if(lots_viewer_tab_active != None):
+                # Переходим обратно на вкладку Выбора лотов
+                # Нажимаем вкладку "Лоты"
+                page.click("//li/a[text()='Лоты']")
+
+                # Подтверждаем переход на вкладку Выбора лотов
+                try:
+                    page.wait_for_selector("//li[//a[text()='Лоты'] and @class='active']", timeout=5000)            
+                except TimeoutError:
+                    self.logger.debug("Tab with Lots selecting is not found")
+                    raise
+
+            # Подводим итоги итерации
+            # TBD: total_processed неправильно считает обработанные лоты. 
+            ## Возможное решение: номер каждого обработанного лота складывать в сет(если он не допускает повторов строковых значений)
+            total_processed += len(lot_rows)
+            logging.info(f"Страница {current_page}: выбрано {selected_on_page} лотов")
+
+            if selected_on_page == 0:
+                # Проверяем, нужно ли продолжать поиск
+                is_last_page = (total_processed >= declaration_lots_count)
+                
+                if not lot_selector.has_remaining_lots() or is_last_page:
+                    break
+
+                # Переход на следующую страницу
+                next_button = page.query_selector("//a[text()='>']")
+                if not next_button:
+                    logging.warning("Кнопка перехода на следующую страницу не найдена")
+                    break
+                    
+                next_button.click()
+                current_page += 1
+                # Ждем загрузки следующей страницы
+                page.wait_for_load_state("networkidle") # NOTE: Тут могут быть проблемы. Неизвестный функционал
+            elif selected_on_page > 0:
+                continue
+        
+        # Проверяем результаты
+        if lot_selector.remaining_lots and not lot_selector.config.include_all:
+            missing_lots = sorted(lot_selector.remaining_lots)
+            warning_msg = f"Один или несколько лотов не удалось найти в заявке: {', '.join(missing_lots)}"
+            logging.warning(warning_msg)
+            print(warning_msg)
+    

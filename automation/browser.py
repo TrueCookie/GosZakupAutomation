@@ -8,7 +8,7 @@ class BrowserAutomation:
         self.browser = None
         self.page = None
 
-    def start(self, visible, is_debug: bool = False):
+    def start(self, page_url_base='https://v3bl.goszakup.gov.kz/ru/application/docs/'):
         self.playwright = sync_playwright().start()
         self.browser = self.playwright.chromium.connect_over_cdp("http://localhost:9222")
         
@@ -19,7 +19,7 @@ class BrowserAutomation:
         # Найти нужную страницу по URL
         target_page = next(
             (page for page in pages 
-            if page.url.startswith('https://v3bl.goszakup.gov.kz/ru/application/docs/')), 
+            if page.url.startswith(page_url_base)), 
             None
         )
         self.page = target_page

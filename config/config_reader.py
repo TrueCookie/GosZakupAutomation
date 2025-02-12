@@ -47,6 +47,7 @@ class ConfigReader:
             )
 
         # Получаем номера лотов
+        # TBD: добавить .strip()/Проверить, что astype(int) парсит строки с пробелами
         self.lots = set(self.lots_df["Номер лота"].dropna().astype(int).map(lambda x: str(x)).tolist())
         
 

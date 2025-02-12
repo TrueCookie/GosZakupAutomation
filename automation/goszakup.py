@@ -91,7 +91,7 @@ class GosZakupAutomation:
 
             # 3.1 Подтверждаем переход на нужную страницу
             try:
-                page.wait_for_selector("//h4[contains(text(),'Добавление лотов для участия в закупке')]", timeout=10000)            
+                page.wait_for_selector("//h4[contains(text(),'Добавление лотов для участия в закупке')]", timeout=60000)            
             except TimeoutError:
                 self.logger.debug("Required page is not found")
                 raise
@@ -102,7 +102,7 @@ class GosZakupAutomation:
             self.select_lots(page, lots_selector, lots_count_in_app)
 
             # 4. Нажимаем кнопку "Далее"
-            page.click("//button[text()='Далее']")
+            page.click("//button[text()='Далее']", timeout=30000)
             #self.actions.wait_and_click("//button[text()='Далее']")
             self.logger.debug("Clicked 'Next' button")
 
@@ -549,7 +549,7 @@ class GosZakupAutomation:
         """
         logging.info(f"Режим выбора лотов: {lot_selector.get_selection_mode()}")
         
-        total_processed = 0
+        total_processed = set()
         current_page = 1
         
         while True:
@@ -558,7 +558,7 @@ class GosZakupAutomation:
             #lot_checkboxes = page.query_selector_all("input[type='checkbox']") # Заменить на получение row
             lot_rows = page.query_selector_all("//div[contains(@class, 'active')]//table//tbody//tr")
             
-            if not lot_rows:
+            if not lot_rows or len(lot_rows) == 0:
                 # Если на предыдущем шаге мы выбрали все лоты, на странице их не окажется
                 break
                 #raise ValueError(f"На странице {current_page} не найдена таблица для выбора лотов.")
@@ -576,16 +576,27 @@ class GosZakupAutomation:
                     checkbox.check()
                     selected_on_page += 1
                     lot_selector.mark_lot_processed(lot_number)
+                
+                total_processed.add(lot_number)
                 #else:
                 #    checkbox.uncheck() # TBD: Оптимизация: это действие нам не нужно
                 
             # Нажимаем "Добавить выбранные"
-            add_button = page.query_selector("//button[text()='Добавить выбранные']")
-            if add_button:
-                add_button.click()
-                logging.info("Нажата кнопка 'Добавить выбранные'")
-            else:
-                raise ValueError("Кнопка 'Добавить выбранные' не найдена")
+            try:
+                page.wait_for_selector("//button[text()='Добавить выбранные']", timeout=30000)
+                add_button = page.query_selector("//button[text()='Добавить выбранные']")
+                if add_button:
+                    add_button.click(timeout=30000)
+                    logging.info("Нажата кнопка 'Добавить выбранные'")
+                else:
+                    raise ValueError("Кнопка 'Добавить выбранные' не найдена")
+            except Exception as e:
+                is_last_page = (len(total_processed) >= declaration_lots_count)
+                
+                if not lot_selector.has_remaining_lots() or is_last_page:
+                    break
+                else:
+                    raise
 
             
             # Проверяем был ли переход на вкладку Просмотра выбранных лотов
@@ -613,12 +624,11 @@ class GosZakupAutomation:
             # Подводим итоги итерации
             # TBD: total_processed неправильно считает обработанные лоты. 
             ## Возможное решение: номер каждого обработанного лота складывать в сет(если он не допускает повторов строковых значений)
-            total_processed += len(lot_rows)
             logging.info(f"Страница {current_page}: выбрано {selected_on_page} лотов")
 
             if selected_on_page == 0:
                 # Проверяем, нужно ли продолжать поиск
-                is_last_page = (total_processed >= declaration_lots_count)
+                is_last_page = (len(total_processed) >= declaration_lots_count)
                 
                 if not lot_selector.has_remaining_lots() or is_last_page:
                     break
@@ -626,14 +636,18 @@ class GosZakupAutomation:
                 # Переход на следующую страницу
                 next_button = page.query_selector("//a[text()='>']")
                 if not next_button:
-                    logging.warning("Кнопка перехода на следующую страницу не найдена")
+                    logging.info("Кнопка перехода на следующую страницу не найдена")
                     break
-                    
-                next_button.click()
+                
+                logging.info("Кнопка перехода на следующую страницу найдена")
+                next_button.click(timeout=30000)
+                logging.info("Кнопка перехода на следующую страницу нажата")
                 current_page += 1
                 # Ждем загрузки следующей страницы
                 page.wait_for_load_state("networkidle") # NOTE: Тут могут быть проблемы. Неизвестный функционал
             elif selected_on_page > 0:
+                # Ждем загрузки следующей страницы
+                page.wait_for_load_state("networkidle") # NOTE: Тут могут быть проблемы. Неизвестный функционал
                 continue
         
         # Проверяем результаты

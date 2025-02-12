@@ -17,9 +17,10 @@ def main():
     #automation.start(page_url_base='https://v3bl.goszakup.gov.kz/ru/application/create')
     #automation.start(page_url_base='https://v3bl.goszakup.gov.kz/ru/application/lots')
     #automation.page.set_default_timeout(5000)
-
-    lots_count_in_app_text = "98"
-    lots_count_in_app = int(lots_count_in_app_text)
+    
+    total_processed = set()
+    total_processed.add('1')
+    total_processed.add('1')
 
     print("")
 

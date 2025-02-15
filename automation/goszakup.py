@@ -34,6 +34,11 @@ class GosZakupAutomation:
             wait_actions_button_timeout=60*40
             lots_count_in_app = None
             
+            # # TBD: Comment
+            # # Запоминаем кол-во лотов в заявке
+            # lots_count_in_app = 33
+            
+            #TBD: Uncomment
             # 1.1 Подтверждаем переход на нужную страницу
             try:
                 page.wait_for_selector("//h4[contains(text(),'Просмотр объявления')]", timeout=5000)            
@@ -86,7 +91,6 @@ class GosZakupAutomation:
 
             # 2.5 Нажимаем кнопку "Далее"
             page.click("//button[text()='Далее']")
-            #self.actions.wait_and_click("//button[text()='Далее']")
             self.logger.debug("Clicked 'Next' button")
 
             # 3.1 Подтверждаем переход на нужную страницу
@@ -97,13 +101,11 @@ class GosZakupAutomation:
                 raise
             
             # 3.2 Выбираем нужные лоты
-            # Для каждой страницы
             lots_selector = LotSelector(self.config)
             self.select_lots(page, lots_selector, lots_count_in_app)
 
             # 4. Нажимаем кнопку "Далее"
             page.click("//button[text()='Далее']", timeout=30000)
-            #self.actions.wait_and_click("//button[text()='Далее']")
             self.logger.debug("Clicked 'Next' button")
 
             # 5. Подтверждаем переход страницу со списком документации
@@ -555,32 +557,52 @@ class GosZakupAutomation:
         while True:
             # Подсчитываем лоты на текущей странице
             selected_on_page = 0
-            #lot_checkboxes = page.query_selector_all("input[type='checkbox']") # Заменить на получение row
-            lot_rows = page.query_selector_all("//div[contains(@class, 'active')]//table//tbody//tr")
-            
-            if not lot_rows or len(lot_rows) == 0:
+
+            # Ждем появления таблицы
+            try:
+                page.wait_for_selector("//div[contains(@class, 'active')]//table//tbody//tr", 
+                                state="visible", 
+                                timeout=10000) # TBD: Оптимизация, поставить меньшее время: 1000
+            except Exception as e:
                 # Если на предыдущем шаге мы выбрали все лоты, на странице их не окажется
+                logging.error(f"На странице не представлено лотов для выбора. Переходим к оформлению заявки")
                 break
-                #raise ValueError(f"На странице {current_page} не найдена таблица для выбора лотов.")
+
+            # Ждем стабилизации DOM
+            page.wait_for_load_state("domcontentloaded")
+            
+            # Используем локатор для надежного доступа к элементам
+            #lot_rows = page.query_selector_all("//div[contains(@class, 'active')]//table//tbody//tr")
+            table_rows = page.locator("//div[contains(@class, 'active')]//table//tbody//tr")
             
             # TBD: Оптимизация: скрипт 1 лишний раз проходит по всем лотам на странице - изменить алгоритм обработки
             # Обрабатываем лоты на текущей странице
-            for lot_row in lot_rows:
-                lot_number_with_letters = lot_row.query_selector("//td[2]").text_content()
-                number_separator_index = lot_number_with_letters.find('-')
-                
-                lot_number = lot_number_with_letters[:number_separator_index]
-                checkbox = lot_row.query_selector("input[type='checkbox']")
+            #for lot_row in table_rows:
+            for i in range(table_rows.count()):
+                try:
+                    row = table_rows.nth(i)
+                    cell = row.locator("td").nth(1)
+                    
+                    # Ждем появления текста в ячейке
+                    cell.wait_for(state="visible")
+                    
+                    lot_number_with_letters = cell.text_content()
+                    number_separator_index = lot_number_with_letters.find('-')
+                    lot_number = lot_number_with_letters[:number_separator_index]
+                    
+                    checkbox = row.locator("input[type='checkbox']")
+                    if lot_selector.should_select_lot(lot_number):
+                        checkbox.check()
+                        selected_on_page += 1
+                        lot_selector.mark_lot_processed(lot_number)
 
-                if lot_selector.should_select_lot(lot_number):
-                    checkbox.check()
-                    selected_on_page += 1
-                    lot_selector.mark_lot_processed(lot_number)
-                
-                total_processed.add(lot_number)
-                #else:
-                #    checkbox.uncheck() # TBD: Оптимизация: это действие нам не нужно
-                
+                    total_processed.add(lot_number)
+            
+                except Exception as e:
+                    logging.error(f"Ошибка при обработке строки {i}: {str(e)}")
+                    continue
+            ### КОНЕЦ ЦИКЛА ПО СТРОКАМ
+             
             # Нажимаем "Добавить выбранные"
             try:
                 page.wait_for_selector("//button[text()='Добавить выбранные']", timeout=30000)
@@ -653,7 +675,8 @@ class GosZakupAutomation:
         # Проверяем результаты
         if lot_selector.remaining_lots and not lot_selector.config.include_all:
             missing_lots = sorted(lot_selector.remaining_lots)
+            # TBD: Отредактировать сообщение, в зависимости от режима. Если режим "Исключить", сообщение "не выбраны лоты:"
             warning_msg = f"Один или несколько лотов не удалось найти в заявке: {', '.join(missing_lots)}"
             logging.warning(warning_msg)
             print(warning_msg)
-    
+

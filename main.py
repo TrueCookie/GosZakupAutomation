@@ -28,7 +28,7 @@ def main():
         if config_reader.should_execute_step(0):
             start_url = 'https://v3bl.goszakup.gov.kz/ru/announce/index'
         else: # страница со списком документации (с 1 шага)
-            start_url = 'https://v3bl.goszakup.gov.kz/ru/application/docs/'
+            start_url = 'https://v3bl.goszakup.gov.kz/ru/application/docs'
         
         # # TBD: Remove
         # start_url = 'https://v3bl.goszakup.gov.kz/ru/application/lots'

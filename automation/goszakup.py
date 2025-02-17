@@ -31,14 +31,9 @@ class GosZakupAutomation:
             
             page.set_default_timeout(10000)
             
-            wait_actions_button_timeout=60*40
+            ACTIONS_BUTTON_TIMEOUT=5    # minutes
             lots_count_in_app = None
-            
-            # # TBD: Comment
-            # # Запоминаем кол-во лотов в заявке
-            # lots_count_in_app = 33
-            
-            #TBD: Uncomment
+
             # 1.1 Подтверждаем переход на нужную страницу
             try:
                 page.wait_for_selector("//h4[contains(text(),'Просмотр объявления')]", timeout=5000)            
@@ -47,15 +42,12 @@ class GosZakupAutomation:
                 self.auth_actions.full_auth(page)
             
             # 1.2 Ожидаем появления кнопки "Доступные действия"
-            if self.wait_for_button(
-                page,
-                "//button[text()='Доступные действия ']",
-                timeout=wait_actions_button_timeout
-            ):
-                self.logger.info("Button 'Available actions' has appeared")
-            else:
-                raise Exception(f"Превышено кол-во времени для ожидания кнопки 'Доступные действия' (Таймаут: {wait_actions_button_timeout} c)")
-
+            if not self.wait_for_actions_button(page, timeout_minutes=1): # TBD: Изменить на 5
+                raise Exception(
+                    f"""Превышено кол-во времени для ожидания кнопки 'Доступные действия' 
+                    (Максимальное ожидание: {ACTIONS_BUTTON_TIMEOUT} минут)"""
+                )
+                                          
             # TBD: Добавить проверку, что открыта вкладка "Общие сведения". Если нет - открыть
             # Запоминаем кол-во лотов в заявке
             lots_count_in_app_text = page.text_content("//table//tr[.//th[text()='Кол-во лотов в объявлении']]//td")
@@ -572,12 +564,10 @@ class GosZakupAutomation:
             page.wait_for_load_state("domcontentloaded")
             
             # Используем локатор для надежного доступа к элементам
-            #lot_rows = page.query_selector_all("//div[contains(@class, 'active')]//table//tbody//tr")
             table_rows = page.locator("//div[contains(@class, 'active')]//table//tbody//tr")
             
             # TBD: Оптимизация: скрипт 1 лишний раз проходит по всем лотам на странице - изменить алгоритм обработки
             # Обрабатываем лоты на текущей странице
-            #for lot_row in table_rows:
             for i in range(table_rows.count()):
                 try:
                     row = table_rows.nth(i)
@@ -680,3 +670,46 @@ class GosZakupAutomation:
             logging.warning(warning_msg)
             print(warning_msg)
 
+    def wait_for_actions_button(self, page, timeout_minutes: int = 5) -> bool:
+        start_time = time.time()
+        end_time = start_time + (timeout_minutes * 60)
+        reload_count = 0
+        
+        while time.time() < end_time:
+            try:
+                reload_count += 1
+                remaining_minutes = int((end_time - time.time()) / 60)
+                
+                self.logger.info(
+                    f"Попытка {reload_count}. "
+                    f"Осталось примерно {remaining_minutes} минут"
+                )
+                
+                # Ждем загрузки страницы
+                page.wait_for_load_state("networkidle")
+                
+                # Быстрая проверка наличия кнопки
+                if page.query_selector("//button[text()='Доступные действия ']"):
+                    self.logger.info("Кнопка 'Доступные действия' найдена")
+                    self.logger.debug(f"Время ожидания: {time.time() - start_time}. Перезагрузок страницы: {reload_count}.")
+                    return True
+                    
+                # Если кнопки нет - сразу перезагружаем
+                self.logger.info("Кнопка не найдена, перезагрузка страницы...")
+                page.reload()
+                
+                # Минимальная пауза для избежания излишней нагрузки
+                time.sleep(2)
+                
+            except Exception as e:
+                self.logger.error(f"Ошибка при проверке кнопки: {str(e)}")
+                if time.time() < end_time:
+                    time.sleep(2)
+                    continue
+                break
+        
+        self.logger.warning(
+            f"Кнопка не появилась после {timeout_minutes} минут ожидания "
+            f"и {reload_count} попыток"
+        )
+        return False

@@ -30,15 +30,13 @@ def main():
         else: # страница со списком документации (с 1 шага)
             start_url = 'https://v3bl.goszakup.gov.kz/ru/application/docs'
         
-        # # TBD: Remove
-        # start_url = 'https://v3bl.goszakup.gov.kz/ru/application/lots'
-        
         automation.start(page_url_base=start_url)
         goszakup_actions = GosZakupAutomation(config, automation.page)
         
         print(f"Открыта страница: {automation.page.title()}")
         
         # TBD: Если открыта страница авторизации - авторизуйся
+        
         # # Шаг 0 - Начальные действия подачи заявки на участие на странице 'Просмотр объявления'
         if config_reader.should_execute_step(0): # TBD: Сделать более user-frienldy (начинать с 1 или вынести в отдельное поле)
             goszakup_actions.start_submit_application(automation.page)

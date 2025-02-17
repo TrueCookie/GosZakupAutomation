@@ -64,6 +64,9 @@ class ConfigReader:
         else:
             self.active_steps = list(range(0, 7))  # все шаги с 1 по 6
 
+        # Считываем максимальное время ожидания кнопки "Доступные действия"
+        self.actions_button_timeout = float(self.debug_df['Время ожидания кнопки "Доступные действия"'].iloc[0])
+
 
     def get_config(self) -> Config:
         # Находим строку по номеру в поле "№ п/п"
@@ -80,7 +83,8 @@ class ConfigReader:
             lots=self.lots,
             include_specific=self.include_specific,
             include_all=self.include_all,
-            exclude_lots=self.exclude_lots
+            exclude_lots=self.exclude_lots,
+            actions_button_timeout=self.actions_button_timeout
         )
 
     def should_execute_step(self, step_number: int) -> bool:

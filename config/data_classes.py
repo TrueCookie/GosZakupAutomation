@@ -14,5 +14,6 @@ class Config:
     include_specific: float64
     include_all: float64
     exclude_lots: float64
+    actions_button_timeout: float64
 
 

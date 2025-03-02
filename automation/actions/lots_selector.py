@@ -17,16 +17,18 @@ class LotSelector:
 
     def mark_lot_processed(self, lot_number: str):
         """Отмечаем лот как обработанный"""
-        if not self.config.include_all:
-            if self.config.exclude_lots:
-                self.selected_lots.add(lot_number)
-            else:
-                self.remaining_lots.discard(lot_number)
+        self.selected_lots.add(lot_number)
+        self.remaining_lots.discard(lot_number)
+        # if not self.config.include_all:
+        #     if self.config.exclude_lots:
+        #         self.selected_lots.add(lot_number)
+        #     else:
+        #         self.remaining_lots.discard(lot_number)
 
     def has_remaining_lots(self) -> bool:
         """Проверяем, остались ли необработанные лоты"""
-        if self.config.include_all or self.config.exclude_lots:
-            return True
+        # if self.config.include_all or self.config.exclude_lots:
+        #     return True
         return bool(self.remaining_lots)
 
     def get_selection_mode(self) -> str:

@@ -29,7 +29,7 @@ class GosZakupAutomation:
         try:
             self.logger.info("Starting submitting application")
             
-            page.set_default_timeout(10000)
+            page.set_default_timeout(3000)
             
             lots_count_in_app = None
 
@@ -48,7 +48,7 @@ class GosZakupAutomation:
                 )
                                           
             # Проверяем, что открыта вкладка "Общие сведения". Если нет - открываем
-            self.check_opened_tab(page, target_tab_text='Общие сведения')
+            self.check_opened_tab(page, target_tab_text='Общие сведения', check_tab_timeout=1000)
 
             # Запоминаем кол-во лотов в заявке
             lots_count_in_app_text = page.text_content("//table//tr[.//th[text()='Кол-во лотов в объявлении']]//td")
@@ -98,7 +98,7 @@ class GosZakupAutomation:
             self.select_lots(page, lots_selector, lots_count_in_app)
 
             # 4. Нажимаем кнопку "Далее"
-            page.click("//button[text()='Далее']", timeout=30000)
+            page.click("//button[text()='Далее']", timeout=5000)
             self.logger.debug("Clicked 'Next' button")
 
             # 5. Подтверждаем переход страницу со списком документации
@@ -550,19 +550,19 @@ class GosZakupAutomation:
         while True:
             # Подсчитываем лоты на текущей странице
             selected_on_page = 0
+            
+            # Ждем стабилизации DOM
+            page.wait_for_load_state("domcontentloaded")
 
             # Ждем появления таблицы
             try:
                 page.wait_for_selector("//div[contains(@class, 'active')]//table//tbody//tr", 
                                 state="visible", 
-                                timeout=10000) # TBD: Оптимизация, поставить меньшее время: 1000
+                                timeout=1000) # TBD: Оптимизация, поставить меньшее время: 1000
             except Exception as e:
                 # Если на предыдущем шаге мы выбрали все лоты, на странице их не окажется
                 logging.error(f"На странице не представлено лотов для выбора. Переходим к оформлению заявки")
                 break
-
-            # Ждем стабилизации DOM
-            page.wait_for_load_state("domcontentloaded")
             
             # Используем локатор для надежного доступа к элементам
             table_rows = page.locator("//div[contains(@class, 'active')]//table//tbody//tr")
@@ -596,10 +596,10 @@ class GosZakupAutomation:
              
             # Нажимаем "Добавить выбранные"
             try:
-                page.wait_for_selector("//button[text()='Добавить выбранные']", timeout=30000)
+                page.wait_for_selector("//button[text()='Добавить выбранные']", timeout=1000)
                 add_button = page.query_selector("//button[text()='Добавить выбранные']")
                 if add_button:
-                    add_button.click(timeout=30000)
+                    add_button.click(timeout=1000)
                     logging.info("Нажата кнопка 'Добавить выбранные'")
                 else:
                     raise ValueError("Кнопка 'Добавить выбранные' не найдена")
@@ -612,7 +612,33 @@ class GosZakupAutomation:
                     raise
 
             # Проверяем был ли переход на вкладку Просмотра выбранных лотов
-            self.check_opened_tab(page, target_tab_text='Лоты')
+            #self.check_opened_tab(page, target_tab_text='Лоты', check_tab_timeout=2000)
+            # Проверяем был ли переход на вкладку Просмотра выбранных лотов
+            lots_viewer_tab_active = None
+            try:
+                # TBD: Оптимизация: возможно для подтверждения не-перехода на страницу просмотра 
+                # выбранных лотов нужно меньше времени
+                # NOTE: Селектор работает неправильно, но алгоритм отрабатывает
+                lots_viewer_tab_active = page.wait_for_selector(
+                        "//li[//a[text()='Просмотр выбранных '] and @class='active']",
+                        timeout=10000
+                    )
+            except TimeoutError:
+                self.logger.debug("Tab with Lots viewer is not found")
+            
+            # Если перешли на вторую вкладку - возвращаемся на первую
+            if(lots_viewer_tab_active != None):
+                # Переходим обратно на вкладку Выбора лотов
+                # Нажимаем вкладку "Лоты"
+                page.click("//li/a[text()='Лоты']")
+
+                # Подтверждаем переход на вкладку Выбора лотов
+                try:
+                    page.wait_for_selector("//li[//a[text()='Лоты'] and @class='active']", timeout=5000)            
+                except TimeoutError:
+                    self.logger.debug("Tab with Lots selecting is not found")
+                    raise
+
             
             # Подводим итоги итерации
             logging.info(f"Страница {current_page}: выбрано {selected_on_page} лотов")
@@ -644,7 +670,8 @@ class GosZakupAutomation:
         # Проверяем результаты
         if lot_selector.remaining_lots and not lot_selector.config.include_all:
             missing_lots = sorted(lot_selector.remaining_lots)
-            # TBD: Отредактировать сообщение, в зависимости от режима. Если режим "Исключить", сообщение "не выбраны лоты:"
+            # TBD: Отредактировать сообщение, в зависимости от режима. 
+            # Если режим "Исключить", сообщение "не выбраны лоты:"
             warning_msg = f"Один или несколько лотов не удалось найти в заявке: {', '.join(missing_lots)}"
             logging.warning(warning_msg)
             print(warning_msg)
@@ -693,22 +720,26 @@ class GosZakupAutomation:
         )
         return False
     
-    def check_opened_tab(self, page: Page, target_tab_text: str):
-        # Проверяем активна ли нужная вкладка
-            target_tab_active = None
-            try:
-                target_tab_active = page.wait_for_selector(f"//li[./a[text()='{target_tab_text}'] and @class='active']", timeout=200)
-            except TimeoutError:
-                self.logger.info(f"Tab {target_tab_text} is not active. Open tab.")
-            
-            # Если нужная вкладка не активна, переходим на неё
-            if(target_tab_active == None):
-                # Нажимаем вкладку "Лоты"
-                page.click(f"//li/a[text()='{target_tab_text}']")
+    def check_opened_tab(self, page: Page, target_tab_text: str, check_tab_timeout):
+        # Ждем стабилизации DOM
+        page.wait_for_load_state("domcontentloaded")
 
-                # Подтверждаем переход на вкладку Выбора лотов
-                try:
-                    page.wait_for_selector(f"//li[./a[text()='{target_tab_text}'] and @class='active']", timeout=5000)            
-                except TimeoutError:
-                    self.logger.error(f"Не удалось открыть вкладку {target_tab_text} для получения кол-ва лотов в заявке.")
-                    raise
+        # Проверяем активна ли нужная вкладка
+        target_tab_active = None
+        try:
+            target_tab_active = page.wait_for_selector(f"//li[./a[text()='{target_tab_text}'] and @class='active']", timeout=200)
+            self.logger.info(f"Tab {target_tab_text} is active.")
+        except TimeoutError:
+            self.logger.info(f"Tab {target_tab_text} is not active. Open tab.")
+        
+        # Если нужная вкладка не активна, переходим на неё
+        if(target_tab_active == None):
+            # Нажимаем вкладку "Лоты"
+            page.click(f"//li/a[text()='{target_tab_text}']")
+
+            # Подтверждаем переход на вкладку Выбора лотов
+            try:
+                page.wait_for_selector(f"//li[./a[text()='{target_tab_text}'] and @class='active']", timeout=5000)            
+            except TimeoutError:
+                self.logger.error(f"Не удалось открыть вкладку {target_tab_text} для получения кол-ва лотов в заявке.")
+                raise

@@ -107,3 +107,9 @@ GitHub.sublime-settings
 
 # PyInstaller build files
 build/
+
+#
+dist/
+GosZakupAutomation/
+
+GosZakupAutomation.zip

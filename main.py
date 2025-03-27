@@ -1,4 +1,6 @@
+from datetime import datetime
 import logging
+import os
 import sys
 
 from config.config_reader import ConfigReader
@@ -84,9 +86,23 @@ def main():
         sys.exit(1)
 
     except Exception as e:
+        # Создаем директорию для скриншотов, если она не существует
+        screenshots_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Screenshots")
+        os.makedirs(screenshots_dir, exist_ok=True)
+
+        # При возникновении любого исключения делаем скриншот
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        screenshot_path = os.path.join(screenshots_dir, f"error_{timestamp}.png")
+        if automation.page:
+            automation.page.screenshot(path=screenshot_path)
+            logging.info(f"Скриншот сохранен в: {screenshot_path}")
+            print(f"Скриншот сохранен в: {screenshot_path}")
+        else:
+            logging.info(f"Не удалось сделать скриншот. Не создано подключение к странице браузера.")    
+            
         logging.error(f"Ошибка: {str(e)}")
         print(f"\nПроизошла ошибка: {str(e)}")
-        input("Нажмите Enter для выхода...")
+        input("\nНажмите Enter для выхода...")
         sys.exit(1)
 
     finally:

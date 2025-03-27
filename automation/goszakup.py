@@ -593,10 +593,13 @@ class GosZakupAutomation:
                     logging.error(f"Ошибка при обработке строки {i}: {str(e)}")
                     continue
             ### КОНЕЦ ЦИКЛА ПО СТРОКАМ
-             
+            
+            # Ждем стабилизации DOM
+            page.wait_for_load_state("domcontentloaded")
+
             # Нажимаем "Добавить выбранные"
             try:
-                page.wait_for_selector("//button[text()='Добавить выбранные']", timeout=1000)
+                page.wait_for_selector("//button[text()='Добавить выбранные']", timeout=5000)
                 add_button = page.query_selector("//button[text()='Добавить выбранные']")
                 if add_button:
                     add_button.click(timeout=1000)
